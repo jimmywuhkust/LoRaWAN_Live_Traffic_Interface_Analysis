@@ -1,6 +1,7 @@
 // src/DevEuiFilter.jsx
 import React, { useState, useEffect } from 'react';
 import LineChart from './LineChart';
+import UpinfoTable from './UpinfoTable';
 
 // Helper function to format DevEui input: removes non-hex characters and inserts hyphens every two characters.
 const formatDevEui = (input) => {
@@ -12,6 +13,10 @@ const DevEuiFilter = () => {
   const [upinfo, setUpinfo] = useState([]);
   const [filterInput, setFilterInput] = useState('');
   const [formattedFilter, setFormattedFilter] = useState('');
+  // Map of routerid => previous RSSI value
+  const [prevUpinfoMap, setPrevUpinfoMap] = useState({});
+  // Mapping of routerid => delta (current RSSI - previous RSSI)
+  const [deltaMapping, setDeltaMapping] = useState({});
 
   // Update filter input and auto-format it.
   const handleFilterChange = (e) => {
@@ -39,15 +44,15 @@ const DevEuiFilter = () => {
         const parsed = JSON.parse(messageData);
         // Only consider messages that contain "upinfo".
         if (parsed.upinfo && Array.isArray(parsed.upinfo)) {
-          // If a filter is set, update the data only if DevEui matches.
+          // Check filter: update data only if the DevEui matches (if a filter is provided)
           if (formattedFilter) {
             if (parsed.DevEui && parsed.DevEui.toUpperCase() === formattedFilter.toUpperCase()) {
-              setUpinfo(parsed.upinfo);
+              updateDataWithDelta(parsed.upinfo);
             }
-            // If it doesn't match, do nothing and let the old data persist.
+            // Otherwise, do nothing so previous data persists.
           } else {
-            // If no filter is provided, you might choose to show all data.
-            setUpinfo(parsed.upinfo);
+            // If no filter is provided, update with all data.
+            updateDataWithDelta(parsed.upinfo);
           }
         }
       } catch (error) {
@@ -62,7 +67,25 @@ const DevEuiFilter = () => {
     return () => {
       ws.close();
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [formattedFilter]);
+
+  // Update upinfo and compute delta mapping.
+  const updateDataWithDelta = (newUpinfo) => {
+    const newDeltaMapping = {};
+    const updatedPrev = { ...prevUpinfoMap };
+    newUpinfo.forEach((entry) => {
+      const router = entry.routerid;
+      const currentRssi = entry.rssi;
+      const previousRssi = prevUpinfoMap[router];
+      const delta = previousRssi !== undefined ? currentRssi - previousRssi : 0;
+      newDeltaMapping[router] = delta;
+      updatedPrev[router] = currentRssi;
+    });
+    setPrevUpinfoMap(updatedPrev);
+    setDeltaMapping(newDeltaMapping);
+    setUpinfo(newUpinfo);
+  };
 
   return (
     <div style={{ padding: '20px' }}>
@@ -76,7 +99,14 @@ const DevEuiFilter = () => {
       />
       <p>Formatted DevEui Filter: <strong>{formattedFilter}</strong></p>
       {formattedFilter && upinfo.length > 0 ? (
-        <LineChart upinfo={upinfo} />
+        <div style={{ display: 'flex', gap: '20px', alignItems: 'flex-start' }}>
+          <div style={{ flex: 1 }}>
+            <LineChart upinfo={upinfo} />
+          </div>
+          <div style={{ flex: 1 }}>
+            <UpinfoTable upinfo={upinfo} deltaMapping={deltaMapping} />
+          </div>
+        </div>
       ) : (
         <p>No matching upinfo data received yet...</p>
       )}
