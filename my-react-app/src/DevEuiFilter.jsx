@@ -82,21 +82,32 @@ const DevEuiFilter = () => {
 
   // Update upinfo and compute delta mapping.
   const updateDataWithDelta = (newUpinfo) => {
-    const newDeltaMapping = {};
-    const updatedPrev = { ...prevUpinfoMap };
-    newUpinfo.forEach((entry) => {
-      const router = entry.routerid;
-      const currentRssi = entry.rssi;
-      const previousRssi = prevUpinfoMap[router];
-      const delta = previousRssi !== undefined ? currentRssi - previousRssi : 0;
-      newDeltaMapping[router] = delta;
-      updatedPrev[router] = currentRssi;
+    setPrevUpinfoMap((prev) => {
+      const newDeltaMapping = {};
+      const updatedPrev = { ...prev };
+  
+      newUpinfo.forEach((entry) => {
+        // Ensure the routerid key is consistently a string.
+        const routerKey = String(entry.routerid);
+        // Explicitly convert RSSI to a number.
+        const currentRssi = Number(entry.rssi);
+        const previousRssi = Number(updatedPrev[routerKey]);
+        const delta = !isNaN(previousRssi) ? currentRssi - previousRssi : 0;
+        newDeltaMapping[routerKey] = delta;
+  
+        // Log for debugging
+        console.log(`Router ${routerKey}: previous RSSI = ${prev[routerKey]}, current RSSI = ${currentRssi}, delta = ${delta}`);
+  
+        // Update the current value in our temporary copy.
+        updatedPrev[routerKey] = currentRssi;
+      });
+  
+      // Update deltaMapping and upinfo state based on the new snapshot.
+      setDeltaMapping(newDeltaMapping);
+      setUpinfo(newUpinfo);
+  
+      return updatedPrev;
     });
-    setPrevUpinfoMap(updatedPrev);
-    setDeltaMapping(newDeltaMapping);
-    setUpinfo(newUpinfo);
-    // Save the new message (relevant to updating the table) for debugging.
-    setRelevantMessage(JSON.stringify(newUpinfo, null, 2));
   };
 
   return (
