@@ -17,6 +17,14 @@ const DevEuiFilter = () => {
   const [prevUpinfoMap, setPrevUpinfoMap] = useState({});
   // Mapping of routerid => delta (current RSSI - previous RSSI)
   const [deltaMapping, setDeltaMapping] = useState({});
+  // State to hold the last raw WebSocket message for debugging
+  const [rawMessage, setRawMessage] = useState('');
+  // Toggle to show/hide raw message
+  const [showRawMessage, setShowRawMessage] = useState(false);
+  // State to hold the relevant (table-updating) message
+  const [relevantMessage, setRelevantMessage] = useState('');
+  // Toggle to show/hide the relevant message
+  const [showRelevantMessage, setShowRelevantMessage] = useState(false);
 
   // Update filter input and auto-format it.
   const handleFilterChange = (e) => {
@@ -37,6 +45,8 @@ const DevEuiFilter = () => {
     ws.onmessage = (event) => {
       try {
         let messageData = event.data;
+        // Save the raw message for debugging
+        setRawMessage(messageData);
         // Remove "Received:" prefix if present.
         if (messageData.startsWith("Received:")) {
           messageData = messageData.replace("Received:", "").trim();
@@ -85,6 +95,8 @@ const DevEuiFilter = () => {
     setPrevUpinfoMap(updatedPrev);
     setDeltaMapping(newDeltaMapping);
     setUpinfo(newUpinfo);
+    // Save the new message (relevant to updating the table) for debugging.
+    setRelevantMessage(JSON.stringify(newUpinfo, null, 2));
   };
 
   return (
@@ -110,6 +122,50 @@ const DevEuiFilter = () => {
       ) : (
         <p>No matching upinfo data received yet...</p>
       )}
+      {/* Raw Message Toggle */}
+      <div style={{ marginTop: '10px' }}>
+        <button
+          onClick={() => setShowRawMessage(!showRawMessage)}
+          style={{ fontSize: '10px', padding: '5px' }}
+        >
+          {showRawMessage ? "Hide Raw Message" : "Show Raw Message"}
+        </button>
+        {showRawMessage && (
+          <div style={{
+            fontSize: '10px',
+            marginTop: '5px',
+            backgroundColor: '#f9f9f9',
+            padding: '5px',
+            border: '1px solid #ccc',
+            wordBreak: 'break-all',
+            color: 'black'
+          }}>
+            {rawMessage}
+          </div>
+        )}
+      </div>
+      {/* Relevant Message Toggle */}
+      <div style={{ marginTop: '10px' }}>
+        <button
+          onClick={() => setShowRelevantMessage(!showRelevantMessage)}
+          style={{ fontSize: '10px', padding: '5px' }}
+        >
+          {showRelevantMessage ? "Hide Relevant Message" : "Show Relevant Message"}
+        </button>
+        {showRelevantMessage && (
+          <div style={{
+            fontSize: '10px',
+            marginTop: '5px',
+            backgroundColor: '#f9f9f9',
+            padding: '5px',
+            border: '1px solid #ccc',
+            wordBreak: 'break-all',
+            color: 'black'
+          }}>
+            {relevantMessage}
+          </div>
+        )}
+      </div>
     </div>
   );
 };
