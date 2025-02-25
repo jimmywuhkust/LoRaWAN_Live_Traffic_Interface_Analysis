@@ -15,11 +15,28 @@ const UpinfoTable = ({ upinfo }) => {
   // takes the last 12 characters, and formats them as XX:XX:XX:XX:XX:XX.
   const computeRouterId = (routerid) => {
     try {
-      const idStr = routerid.toString();  // use toString() here
-      const padded = idStr.padStart(12, '0');
-      const last12 = padded.slice(-12);
-      return last12.replace(/(.{2})(?=.)/g, '$1:');
+      let hexStr;
+      // If routerid is an object with a toString method that accepts a radix, use it.
+      if (typeof routerid === 'object' && routerid.toString && routerid.toString(16)) {
+        hexStr = routerid.toString(16).toUpperCase();
+      } else {
+        // Otherwise, assume it's already a string or a number.
+        hexStr = String(routerid);
+        // If it doesn't look like hex (e.g. only digits), you might try converting it using BigInt:
+        if (/^\d+$/.test(hexStr)) {
+          hexStr = BigInt(hexStr).toString(16).toUpperCase();
+        }
+      }
+      // Ensure the hex string has at least 12 characters; if it's longer, take the last 12.
+      if (hexStr.length > 12) {
+        hexStr = hexStr.slice(-12);
+      } else {
+        hexStr = hexStr.padStart(12, '0');
+      }
+      // Insert a colon every two characters.
+      return hexStr.replace(/(.{2})(?=.)/g, '$1:');
     } catch (error) {
+      console.error("Error in computeRouterId:", error);
       return "";
     }
   };
