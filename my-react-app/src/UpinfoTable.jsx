@@ -2,41 +2,35 @@
 import React, { useState } from 'react';
 
 const UpinfoTable = ({ upinfo }) => {
+  // New state for gateway (router) filter input.
   const [gatewayFilter, setGatewayFilter] = useState("");
 
+  // Filter upinfo based on the gatewayFilter input.
   const filteredUpinfo = upinfo.filter(entry => {
     if (!gatewayFilter.trim()) return true;
+    // Convert routerid to string before applying toLowerCase.
     return String(entry.routerid).toLowerCase().includes(gatewayFilter.toLowerCase());
   });
 
+  // Sort the filtered data by RSSI (descending – higher RSSI first).
   const sortedUpinfo = [...filteredUpinfo].sort((a, b) => b.rssi - a.rssi);
 
-  // This function treats the routerid as a string, pads it to at least 12 characters,
-  // takes the last 12 characters, and formats them as XX:XX:XX:XX:XX:XX.
+  // Helper function to compute "Router ID" from the routerid.
+  // It converts the routerid to a hex string, pads it to at least 12 characters,
+  // then takes the last 12 characters and formats them as XX:XX:XX:XX:XX:XX.
   const computeRouterId = (routerid) => {
     try {
-      let hexStr;
-      // If routerid is an object with a toString method that accepts a radix, use it.
-      if (typeof routerid === 'object' && routerid.toString && routerid.toString(16)) {
-        hexStr = routerid.toString(16).toUpperCase();
-      } else {
-        // Otherwise, assume it's already a string or a number.
-        hexStr = String(routerid);
-        // If it doesn't look like hex (e.g. only digits), you might try converting it using BigInt:
-        if (/^\d+$/.test(hexStr)) {
-          hexStr = BigInt(hexStr).toString(16).toUpperCase();
-        }
-      }
-      // Ensure the hex string has at least 12 characters; if it's longer, take the last 12.
-      if (hexStr.length > 12) {
-        hexStr = hexStr.slice(-12);
-      } else {
-        hexStr = hexStr.padStart(12, '0');
-      }
-      // Insert a colon every two characters.
-      return hexStr.replace(/(.{2})(?=.)/g, '$1:');
+      // Convert routerid to BigInt to support large numbers.
+      const bigVal = BigInt(routerid);
+      let hexStr = bigVal.toString(16).toUpperCase();
+      // Pad to at least 12 characters with leading zeros.
+      hexStr = hexStr.padStart(12, '0');
+      // Take the last 12 characters.
+      const last12 = hexStr.slice(-12);
+      // Format as XX:XX:XX:XX:XX:XX.
+      const pairs = last12.match(/.{1,2}/g);
+      return pairs.join(':');
     } catch (error) {
-      console.error("Error in computeRouterId:", error);
       return "";
     }
   };
@@ -70,7 +64,7 @@ const UpinfoTable = ({ upinfo }) => {
           {sortedUpinfo.map((entry, index) => (
             <tr key={index}>
               <td style={{ border: '1px solid #ccc', padding: '8px' }}>{index + 1}</td>
-              <td style={{ border: '1px solid #ccc', padding: '8px' }}>{entry.routerid.toString()}</td>
+              <td style={{ border: '1px solid #ccc', padding: '8px' }}>{entry.routerid}</td>
               <td style={{ border: '1px solid #ccc', padding: '8px' }}>{computeRouterId(entry.routerid)}</td>
               <td style={{ border: '1px solid #ccc', padding: '8px' }}>{entry.snr}</td>
               <td style={{ border: '1px solid #ccc', padding: '8px' }}>{entry.rssi}</td>
