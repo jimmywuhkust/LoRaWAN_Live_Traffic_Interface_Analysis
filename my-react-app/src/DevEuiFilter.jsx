@@ -10,21 +10,75 @@ const formatDevEui = (input) => {
 };
 
 const DevEuiFilter = () => {
+  // State for DEV EUI filter and RID filter
   const [upinfo, setUpinfo] = useState([]);
   const [filterInput, setFilterInput] = useState('');
   const [formattedFilter, setFormattedFilter] = useState('');
+  const [ridFilter, setRidFilter] = useState('');
+
+  // State for previous RSSI to calculate delta
   const [prevUpinfoMap, setPrevUpinfoMap] = useState({});
   const [deltaMapping, setDeltaMapping] = useState({});
+
+  // States for debugging messages
   const [rawMessage, setRawMessage] = useState('');
   const [showRawMessage, setShowRawMessage] = useState(false);
   const [relevantMessage, setRelevantMessage] = useState('');
   const [showRelevantMessage, setShowRelevantMessage] = useState(false);
+
+  // States for recording functionality
+  const [recording, setRecording] = useState(false);
+  const [recordedData, setRecordedData] = useState([]);
+  const [customFileName, setCustomFileName] = useState('recorded_data.csv');
 
   const handleFilterChange = (e) => {
     const value = e.target.value;
     setFilterInput(value);
     const formatted = formatDevEui(value);
     setFormattedFilter(formatted);
+  };
+
+  const handleRidFilterChange = (e) => {
+    setRidFilter(e.target.value);
+  };
+
+  // Generate CSV content from recorded data
+  const generateCSV = () => {
+    // CSV header
+    const header = ['timestamp', 'routerid', 'rssi', 'snr'];
+    const rows = recordedData.map(item => [
+      item.timestamp,
+      item.routerid,
+      item.rssi,
+      item.snr
+    ]);
+    // Join rows into CSV string
+    return [header, ...rows].map(e => e.join(",")).join("\n");
+  };
+
+  // Download CSV file using a Blob
+  const handleDownloadCSV = () => {
+    const csv = generateCSV();
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", customFileName);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  // Toggle recording state. When starting, reset any previous recorded data.
+  const handleRecordingToggle = () => {
+    if (recording) {
+      // Stop recording – you might trigger additional actions here if needed.
+      setRecording(false);
+    } else {
+      setRecordedData([]); // Reset history before recording
+      setRecording(true);
+    }
   };
 
   useEffect(() => {
@@ -41,17 +95,34 @@ const DevEuiFilter = () => {
         if (messageData.startsWith("Received:")) {
           messageData = messageData.replace("Received:", "").trim();
         }
-        // Use json-bigint to parse the message
+        // Parse message with json-bigint
         const parsed = JSONbig.parse(messageData);
+
         if (parsed.upinfo && Array.isArray(parsed.upinfo)) {
-          // Save the entire parsed message for debugging
-          if (formattedFilter) {
-            if (parsed.DevEui && parsed.DevEui.toUpperCase() === formattedFilter.toUpperCase()) {
-              updateDataWithDelta(parsed.upinfo);
-              setRelevantMessage(JSON.stringify(parsed, null, 2));
+          // Check DEV EUI filter (if provided)
+          const devEuiMatches = formattedFilter 
+            ? parsed.DevEui && parsed.DevEui.toUpperCase() === formattedFilter.toUpperCase() 
+            : true;
+          // If RID filter is provided, filter the upinfo array by routerid
+          const filteredUpinfo = ridFilter 
+            ? parsed.upinfo.filter(entry => String(entry.routerid) === ridFilter)
+            : parsed.upinfo;
+
+          if (devEuiMatches && filteredUpinfo.length > 0) {
+            updateDataWithDelta(filteredUpinfo);
+            setRelevantMessage(JSON.stringify(parsed, null, 2));
+
+            // If recording is enabled, append the SNR and RSSI values with a timestamp
+            if (recording) {
+              const timestamp = new Date().toISOString();
+              const recordEntries = filteredUpinfo.map(entry => ({
+                timestamp,
+                routerid: entry.routerid,
+                rssi: entry.rssi,
+                snr: entry.snr // Assuming the field "snr" exists in the message
+              }));
+              setRecordedData(prev => [...prev, ...recordEntries]);
             }
-          } else {
-            updateDataWithDelta(parsed.upinfo);
           }
         }
       } catch (error) {
@@ -66,8 +137,8 @@ const DevEuiFilter = () => {
     return () => {
       ws.close();
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [formattedFilter]);
+  // Adding formattedFilter, ridFilter and recording to dependency array to refresh when needed.
+  }, [formattedFilter, ridFilter, recording]);
 
   const updateDataWithDelta = (newUpinfo) => {
     setPrevUpinfoMap((prev) => {
@@ -92,14 +163,23 @@ const DevEuiFilter = () => {
 
   return (
     <div style={{ padding: '20px' }}>
-      <h2>Real WebSocket Output with DevEui Filter</h2>
-      <input
-        type="text"
-        placeholder="Enter DevEui filter (e.g., EB9BD6AC12B61EED)"
-        value={filterInput}
-        onChange={handleFilterChange}
-        style={{ padding: '8px', width: '300px', fontSize: '16px' }}
-      />
+      <h2>Real WebSocket Output with DevEui & RID Filter</h2>
+      <div style={{ marginBottom: '10px' }}>
+        <input
+          type="text"
+          placeholder="Enter DevEui filter (e.g., EB9BD6AC12B61EED)"
+          value={filterInput}
+          onChange={handleFilterChange}
+          style={{ padding: '8px', width: '300px', fontSize: '16px', marginRight: '10px' }}
+        />
+        <input
+          type="text"
+          placeholder="Enter Router ID filter"
+          value={ridFilter}
+          onChange={handleRidFilterChange}
+          style={{ padding: '8px', width: '150px', fontSize: '16px' }}
+        />
+      </div>
       <p>Formatted DevEui Filter: <strong>{formattedFilter}</strong></p>
       {formattedFilter && upinfo.length > 0 ? (
         <div style={{ display: 'flex', gap: '20px', alignItems: 'flex-start' }}>
@@ -113,6 +193,26 @@ const DevEuiFilter = () => {
       ) : (
         <p>No matching upinfo data received yet...</p>
       )}
+      <div style={{ marginTop: '10px' }}>
+        <button onClick={handleRecordingToggle} style={{ fontSize: '10px', padding: '5px' }}>
+          {recording ? "Stop Recording" : "Start Recording"}
+        </button>
+        {/* When recording has stopped and data is available, allow CSV download */}
+        {!recording && recordedData.length > 0 && (
+          <div style={{ marginTop: '10px' }}>
+            <input
+              type="text"
+              value={customFileName}
+              onChange={(e) => setCustomFileName(e.target.value)}
+              placeholder="Enter custom file name"
+              style={{ fontSize: '10px', padding: '5px', marginRight: '5px' }}
+            />
+            <button onClick={handleDownloadCSV} style={{ fontSize: '10px', padding: '5px' }}>
+              Download CSV
+            </button>
+          </div>
+        )}
+      </div>
       <div style={{ marginTop: '10px' }}>
         <button
           onClick={() => setShowRawMessage(!showRawMessage)}
